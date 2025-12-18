@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Word Guesser – Sign Up</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/public/css/style.css" />
+  </head>
+  <body>
+    <div class="auth-shell">
+      <div class="card">
+        <div class="card__header">
+          <h1>Create account</h1>
+          <p class="text-muted">Sign up to join the lobby and games.</p>
+        </div>
+
+        <% if (error) { %>
+          <div class="alert alert--error"><%= error %></div>
+        <% } %>
+
+        <form method="POST" action="/signup" class="form">
+          <label class="label">Username</label>
+          <input class="input" name="username" autocomplete="username" required />
+
+          <label class="label">Email</label>
+          <input class="input" name="email" type="email" autocomplete="email" required />
+
+          <label class="label">Password</label>
+          <input class="input" name="password" type="password" autocomplete="new-password" required />
+
+          <button class="btn btn--primary" type="submit">Create account</button>
+        </form>
+
+        <p class="text-muted mt-12">
+          Already have an account? <a href="/login">Log in</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

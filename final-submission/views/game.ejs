@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Word Guesser – <%= gameName %></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/public/css/style.css" />
+  </head>
+
+  <body>
+    <div class="app-shell" data-game-id="<%= gameId %>">
+      <header class="app-header">
+        <div>
+          <div class="title"><%= gameName %></div>
+          <div class="subtitle">Turn-based guessing · real-time updates</div>
+        </div>
+        <div class="header-right">
+          <a class="btn btn--ghost" href="/lobby">Back to lobby</a>
+          <div class="text-muted">Logged in as <strong><%= user.username %></strong></div>
+          <form method="POST" action="/auth/logout">
+            <button class="btn btn--ghost" type="submit">Log out</button>
+          </form>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="card span-2">
+          <div class="row-between">
+            <h2>Game State</h2>
+            <span id="statePill" class="pill">—</span>
+          </div>
+
+          <div class="kpis">
+            <div class="kpi">
+              <div class="kpi-label">Masked word</div>
+              <div id="maskedWord" class="kpi-value monospace">_ _ _</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Guessed letters</div>
+              <div id="guessedLetters" class="kpi-value monospace">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Remaining attempts</div>
+              <div id="remaining" class="kpi-value">—</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="row-between">
+            <div>
+              <div class="text-muted">Current turn</div>
+              <div id="currentTurn" class="item-title">—</div>
+            </div>
+            <div>
+              <div class="text-muted">Players</div>
+              <div id="players" class="monospace">—</div>
+            </div>
+          </div>
+
+          <form id="guessForm" class="chatbar mt-12">
+            <input id="guessInput" class="input" placeholder="Guess a letter (A) or word (APPLE)" />
+            <button class="btn btn--primary" type="submit">Guess</button>
+          </form>
+
+          <div id="toast" class="toast" style="display:none;"></div>
+        </section>
+
+        <section class="card">
+          <div class="row-between">
+            <h2>Game Room Chat</h2>
+            <div class="text-muted">Visible only to players in this game</div>
+          </div>
+
+          <div id="gameChat" class="chat"></div>
+
+          <form id="gameChatForm" class="chatbar">
+            <input id="gameChatText" class="input" placeholder="Type a message..." />
+            <button class="btn btn--primary" type="submit">Send</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/public/js/game.js"></script>
+  </body>
+</html>

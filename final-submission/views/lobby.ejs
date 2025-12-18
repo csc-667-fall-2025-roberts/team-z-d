@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Word Guesser – Lobby</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/public/css/style.css" />
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <header class="app-header">
+        <div>
+          <div class="title">Word Guesser Lobby</div>
+          <div class="subtitle">Create a game or join an active room.</div>
+        </div>
+        <div class="header-right">
+          <div class="text-muted">Logged in as <strong><%= user.username %></strong></div>
+          <form method="POST" action="/auth/logout">
+            <button class="btn btn--ghost" type="submit">Log out</button>
+          </form>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="card">
+          <h2>Create Game</h2>
+          <form class="form" method="POST" action="/games">
+            <label class="label">Game name</label>
+            <input class="input" name="name" placeholder="e.g., Team 7" />
+
+            <label class="label">Max players (2–8)</label>
+            <input class="input" name="maxPlayers" type="number" min="2" max="8" value="4" />
+
+            <label class="label">Secret word (optional)</label>
+            <input class="input" name="secretWord" placeholder="Leave blank for random" />
+
+            <button class="btn btn--primary" type="submit">Create & Join</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="row-between">
+            <h2>Active Games</h2>
+            <span class="pill" id="gamesCount"><%= games.length %></span>
+          </div>
+          <div id="gamesList" class="list">
+            <% games.forEach(g => { %>
+              <div class="list-item">
+                <div>
+                  <div class="item-title"><%= g.name %></div>
+                  <div class="text-muted">
+                    Host: <%= g.hostUsername %> · Players: <%= g.players %>/<%= g.maxPlayers %> · State: <%= g.state %>
+                  </div>
+                </div>
+                <a class="btn btn--small" href="/game/<%= g.id %>">Join</a>
+              </div>
+            <% }) %>
+          </div>
+        </section>
+
+        <section class="card span-2">
+          <div class="row-between">
+            <h2>Lobby Chat</h2>
+            <div class="text-muted">Visible in lobby only (not in game rooms)</div>
+          </div>
+
+          <div id="lobbyChat" class="chat"></div>
+
+          <form id="lobbyChatForm" class="chatbar">
+            <input id="lobbyChatText" class="input" placeholder="Type a message..." />
+            <button class="btn btn--primary" type="submit">Send</button>
+          </form>
+
+          <div id="toast" class="toast" style="display:none;"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/public/js/lobby.js"></script>
+  </body>
+</html>
