@@ -1,3 +1,6 @@
+
+
+
 const path = require("path");
 const http = require("http");
 const crypto = require("crypto");
@@ -14,7 +17,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// -------------------- Express --------------------
+// -- Express
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
@@ -26,7 +29,7 @@ const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || "dev-secret-change-me",
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: "lax", maxAge: 1000 * 60 * 60 * 8 }
+  cookie: { httpOnly: true, sameSite: "lax", maxAge: 1000 * 60 * 60 * 8 },
 });
 app.use(sessionMiddleware);
 
@@ -46,11 +49,24 @@ function redirectIfAuthed(req, res, next) {
   return next();
 }
 
-// -------------------- Game State (in-memory) --------------------
+// ---- Game State 
 const games = new Map(); // id -> game
-const WORDS = ["APPLE", "BANANA", "ORANGE", "MANGO", "PEACH", "SOCKET", "SESSION", "EXPRESS", "JAVASCRIPT", "COMPUTER"];
+const WORDS = [
+  "APPLE",
+  "BANANA",
+  "ORANGE",
+  "MANGO",
+  "PEACH",
+  "SOCKET",
+  "SESSION",
+  "EXPRESS",
+  "JAVASCRIPT",
+  "COMPUTER",
+];
 
-function sanitizeName(v) { return String(v || "").trim().slice(0, 40); }
+function sanitizeName(v) {
+  return String(v || "").trim().slice(0, 40);
+}
 function sanitizeWord(v) {
   const raw = String(v || "").trim().toUpperCase();
   return raw.replace(/[^A-Z]/g, "").slice(0, 24);
@@ -59,26 +75,37 @@ function sanitizeChat(v) {
   const raw = String(v || "").trim();
   return raw.replace(/[<>]/g, "").slice(0, 240);
 }
-function pickRandomWord() { return WORDS[Math.floor(Math.random() * WORDS.length)]; }
+function pickRandomWord() {
+  return WORDS[Math.floor(Math.random() * WORDS.length)];
+}
 
 function maskWord(word, guessed) {
-  return word.split("").map(c => (guessed.has(c) ? c : "_")).join(" ");
+  return word
+    .split("")
+    .map((c) => (guessed.has(c) ? c : "_"))
+    .join(" ");
 }
 function isSolved(word, guessed) {
   for (const c of word) if (!guessed.has(c)) return false;
   return true;
 }
 
+
+function advanceTurn(game) {
+  if (game.players.length <= 1) return;
+  game.turnIndex = (game.turnIndex + 1) % game.players.length;
+}
+
 function listGamesForLobby() {
   return Array.from(games.values())
     .sort((a, b) => b.createdAt - a.createdAt)
-    .map(g => ({
+    .map((g) => ({
       id: g.id,
       name: g.name,
       state: g.state,
       players: g.players.length,
       maxPlayers: g.maxPlayers,
-      hostUsername: g.hostUsername
+      hostUsername: g.hostUsername,
     }));
 }
 
@@ -100,11 +127,11 @@ function createGame({ host, name, maxPlayers, secretWord }) {
     guessedLetters: new Set(),
     remaining: 6,
 
-    players: [],     // {id, username}
+    players: [], 
     turnIndex: 0,
 
-    chat: [],        // {ts, username, text}
-    winnerId: null
+    chat: [], // {ts, username, text}
+    winnerId: null,
   };
 
   games.set(id, game);
@@ -113,29 +140,30 @@ function createGame({ host, name, maxPlayers, secretWord }) {
 
 function addPlayer(game, user) {
   if (game.state === "ended") return { ok: false, reason: "Game already ended." };
-  if (game.players.some(p => p.id === user.id)) return { ok: true };
+  if (game.players.some((p) => p.id === user.id)) return { ok: true };
   if (game.players.length >= game.maxPlayers) return { ok: false, reason: "Game is full." };
 
   game.players.push({ id: user.id, username: user.username });
+
+  // keep turnIndex valid
   if (game.players.length === 1) game.turnIndex = 0;
+  if (game.turnIndex < 0 || game.turnIndex >= game.players.length) game.turnIndex = 0;
+
   return { ok: true };
 }
 
 function removePlayer(game, userId) {
   const before = game.players.length;
-  game.players = game.players.filter(p => p.id !== userId);
+  game.players = game.players.filter((p) => p.id !== userId);
 
-  // if everyone leaves, delete the game to keep lobby clean
+  // if everyone leaves, delete the game 
   if (game.players.length === 0 && before > 0) {
     games.delete(game.id);
     return;
   }
-  if (game.turnIndex >= game.players.length) game.turnIndex = 0;
-}
 
-function advanceTurn(game) {
-  if (game.players.length === 0) return;
-  game.turnIndex = (game.turnIndex + 1) % game.players.length;
+  // keep turnIndex valid
+  if (game.turnIndex >= game.players.length) game.turnIndex = 0;
 }
 
 function endGame(game, winnerId) {
@@ -156,7 +184,7 @@ function toClientState(game) {
     guessed: Array.from(game.guessedLetters).sort().join(", "),
     masked: maskWord(game.word, game.guessedLetters),
     currentTurn,
-    winnerId: game.winnerId
+    winnerId: game.winnerId,
   };
 }
 
@@ -165,48 +193,80 @@ function pushChat(arr, msg, max = 50) {
   while (arr.length > max) arr.shift();
 }
 
+
 function handleGuess(game, user, guessRaw) {
   if (game.state !== "active") return { ok: false, reason: "Game is not active." };
 
-  const currentTurn = game.players[game.turnIndex];
-  if (!currentTurn || currentTurn.id !== user.id) return { ok: false, reason: "Not your turn." };
+  // keep turnIndex valid
+  if (game.players.length > 0 && (game.turnIndex < 0 || game.turnIndex >= game.players.length)) {
+    game.turnIndex = 0;
+  }
+
+  //  turn order only if 2+ players
+  if (game.players.length > 1) {
+    const currentTurn = game.players[game.turnIndex];
+    if (!currentTurn || currentTurn.id !== user.id) return { ok: false, reason: "Not your turn." };
+  } else {
+    // Single-player -> always your turn
+    game.turnIndex = 0;
+  }
 
   const guess = sanitizeWord(guessRaw);
   if (!guess) return { ok: false, reason: "Enter a letter (A-Z) or a full word." };
 
-  // full-word guess
+  // Full-word guess
   if (guess.length > 1) {
     if (guess === game.word) {
       for (const c of game.word) game.guessedLetters.add(c);
       endGame(game, user.id);
       return { ok: true, message: `${user.username} guessed the word and wins!` };
     }
+
+    // wrong word guess counts as wrong => lose attempt + switch turn (if 2+ players)
     game.remaining -= 1;
+
     if (game.remaining <= 0) {
       endGame(game, null);
       return { ok: true, message: `${user.username} guessed wrong. Game over.` };
     }
+
+    // WRONG => advance turn
     advanceTurn(game);
     return { ok: true, message: `${user.username} guessed wrong.` };
   }
 
+  // Single-letter guess
   const letter = guess[0];
-  if (game.guessedLetters.has(letter)) return { ok: false, reason: "That letter was already guessed." };
+
+  if (game.guessedLetters.has(letter)) {
+    // Do NOT switch turn here; just reject so they try again
+    return { ok: false, reason: "That letter was already guessed." };
+  }
 
   game.guessedLetters.add(letter);
-  if (!game.word.includes(letter)) game.remaining -= 1;
+
+  const wrong = !game.word.includes(letter);
+  if (wrong) game.remaining -= 1;
 
   if (isSolved(game.word, game.guessedLetters)) {
     endGame(game, user.id);
     return { ok: true, message: `${user.username} completed the word and wins!` };
   }
+
   if (game.remaining <= 0) {
     endGame(game, null);
     return { ok: true, message: "No attempts left. Game over." };
   }
 
-  advanceTurn(game);
-  return { ok: true, message: `${user.username} guessed "${letter}".` };
+  // WRONG => advance turn, CORRECT => keep same player
+  if (wrong) advanceTurn(game);
+
+  return {
+    ok: true,
+    message: wrong
+      ? `${user.username} guessed "${letter}" (wrong).`
+      : `${user.username} guessed "${letter}" (correct).`,
+  };
 }
 
 // -------------------- Routes --------------------
@@ -250,7 +310,7 @@ app.post("/games", requireAuth, (req, res) => {
     host: user,
     name: req.body.name,
     maxPlayers: req.body.maxPlayers,
-    secretWord: req.body.secretWord
+    secretWord: req.body.secretWord,
   });
 
   addPlayer(game, user);
@@ -291,7 +351,7 @@ io.on("connection", (socket) => {
     socket.emit("lobby:chatHistory", lobbyChat);
   });
 
-  // Lobby chat (global) — should only go to lobby room
+  // Lobby chat (global) — only goes to lobby room
   socket.on("lobby:chat", ({ text }) => {
     if (!socket.rooms.has("lobby")) return;
     const safe = sanitizeChat(text);
@@ -302,9 +362,9 @@ io.on("connection", (socket) => {
     io.to("lobby").emit("lobby:chat", msg);
   });
 
-  // Join game room
+  // Join game room 
   socket.on("game:join", ({ gameId }) => {
-    socket.leave("lobby"); // ensures lobby chat doesn't leak into game page
+    socket.leave("lobby"); // stop lobby chat bleed
 
     const game = games.get(String(gameId));
     if (!game) return socket.emit("app:error", { message: "Game not found." });
@@ -313,16 +373,19 @@ io.on("connection", (socket) => {
     if (!add.ok) return socket.emit("app:error", { message: add.reason });
 
     socket.data.gameId = game.id;
+
+    // join THIS game's room once
     socket.join(`game:${game.id}`);
 
+    // send history/state to this socket + broadcast state to room
     socket.emit("game:chatHistory", game.chat);
     io.to(`game:${game.id}`).emit("game:state", toClientState(game));
 
-    // update lobby list for other clients
+    // update lobby list for people in lobby
     io.to("lobby").emit("lobby:games", listGamesForLobby());
   });
 
-  // Guess handling (unidirectional flow: client -> server -> broadcast new state)
+  // Guess handling
   socket.on("game:guess", ({ gameId, guess }) => {
     const game = games.get(String(gameId));
     if (!game) return socket.emit("app:error", { message: "Game not found." });
@@ -336,14 +399,18 @@ io.on("connection", (socket) => {
     if (result.message) {
       const sys = { ts: Date.now(), username: "System", text: result.message };
       pushChat(game.chat, sys, 50);
+     
       io.to(`game:${game.id}`).emit("game:chat", sys);
     }
 
+    // game-only state update
     io.to(`game:${game.id}`).emit("game:state", toClientState(game));
+
+    // lobby list update
     io.to("lobby").emit("lobby:games", listGamesForLobby());
   });
 
-  // Game chat (room-scoped)
+  // Game chat (room-scoped) — ONLY players in THIS game will see it
   socket.on("game:chat", ({ gameId, text }) => {
     const game = games.get(String(gameId));
     if (!game) return socket.emit("app:error", { message: "Game not found." });
@@ -356,6 +423,8 @@ io.on("connection", (socket) => {
 
     const msg = { ts: Date.now(), username: user.username, text: safe };
     pushChat(game.chat, msg, 50);
+
+    // ONLY game room receives it
     io.to(`game:${game.id}`).emit("game:chat", msg);
   });
 
@@ -372,6 +441,7 @@ io.on("connection", (socket) => {
     if (games.has(String(gameId))) {
       io.to(`game:${gameId}`).emit("game:state", toClientState(game));
     }
+
     io.to("lobby").emit("lobby:games", listGamesForLobby());
   });
 });
